@@ -12,7 +12,7 @@
 # resume a partially completed download. All images will be saved in the JPG
 # format with 90% compression quality.
 
-import sys, os, multiprocessing, csv
+import sys, os, multiprocessing, csv, tqdm
 from urllib import request, error
 from PIL import Image
 from io import BytesIO
