@@ -17,6 +17,10 @@ from urllib import request, error
 from PIL import Image
 from io import BytesIO
 
+module_path = os.path.abspath(os.path.join('..'))
+sys.path.append(module_path)
+from utils.data_util import save_obj, load_obj
+from conf.configure import *
 
 def parse_data(data_file):
     csvfile = open(data_file, 'r')
@@ -26,13 +30,26 @@ def parse_data(data_file):
 
 
 def download_image(key_url):
-    out_dir = sys.argv[2]
+#     out_dir = sys.argv[2]
+#     (key, url) = key_url
+#     filename = os.path.join(out_dir, '{}.jpg'.format(key))
+
+#     if os.path.exists(filename):
+#         print('Image {} already exists. Skipping download.'.format(filename))
+#         return 0
+    
+    out_dir = new_images_folder
+    check_1_dir = train_images_folder
+    check_2_dir = val_images_folder
     (key, url) = key_url
+    check_1_name = os.path.join(check_1_dir, '{}.jpg'.format(key))
+    check_2_name = os.path.join(check_2_dir, '{}.jpg'.format(key))
     filename = os.path.join(out_dir, '{}.jpg'.format(key))
 
-    if os.path.exists(filename):
+    if os.path.exists(check_1_name) or os.path.exists(filename) or os.path.exists(check_2_name):
         print('Image {} already exists. Skipping download.'.format(filename))
         return 0
+
 
     try:
         response = request.urlopen(url)
