@@ -33,7 +33,7 @@ import keras
 
 import losswise
 from losswise.libs import LosswiseKerasCallback
-# losswise.set_api_key('JWN8A6X96')
+losswise.set_api_key('JWN8A6X96')
 
 module_path = os.path.abspath(os.path.join('..'))
 sys.path.append(module_path)
@@ -78,7 +78,151 @@ def first_phase():
 
     xcpetion_model.save(data_folder + '1st_phase_xcpetion_model.h5')
     
+def second_phase():
+    global xcpetion_model
+    tensorboard = TensorBoard(log_dir=second_phase_folder + 'tb_logs', batch_size=batch_size)
+    xcpetion_model = load_model(data_folder + '1st_phase_xcpetion_model.h5')
+
+    trainable_layers_ratio = 1/3.0
+    trainable_layers_index = int(len(xcpetion_model.layers) * (1 - trainable_layers_ratio))
+    for layer in xcpetion_model.layers[:trainable_layers_index]:
+       layer.trainable = False
+    for layer in xcpetion_model.layers[trainable_layers_index:]:
+       layer.trainable = True
+
+    # for layer in xcpetion_model.layers:
+    #     layer.trainable = True
+
+    xcpetion_model.compile(optimizer=Adam(lr=0.0001), loss='categorical_crossentropy', metrics=['acc'])
+
+    # train the model on the new data for a few epochs
+    for i in range(second_phase_train_reps):
+        history = xcpetion_model.fit_generator(train_img_class_gen,
+                                               steps_per_epoch=steps_per_small_epoch,
+                                               epochs=small_epochs, verbose=2,
+                                               validation_data=val_img_class_gen, validation_steps=val_steps_per_small_epoch,
+                                               workers=4, callbacks=[tensorboard])
+        print(i)
+        if i % saves_per_epoch == 0:
+            print('{} epoch completed'.format(int(i / saves_per_epoch)))
+
+        ts = calendar.timegm(time.gmtime())
+        xcpetion_model.save(second_phase_folder + str(ts) + '_xcpetion_model.h5')
+        save_obj(history.history, str(ts) + '_xcpetion_history.h5', folder=second_phase_folder)
+
+    xcpetion_model.save(data_folder + '2nd_phase_xcpetion_model.h5')
+    
+def third_phase():
+    global xcpetion_model, new_xcpetion_model, optimizer
+    tensorboard = TensorBoard(log_dir=third_phase_folder + 'tb_logs', batch_size=batch_size)
+    xcpetion_model = load_model(data_folder + '2nd_phase_xcpetion_model.h5')
+
+    # add regularizers to the convolutional layers
+    trainable_layers_ratio = 1 / 2.0
+    trainable_layers_index = int(len(xcpetion_model.layers) * (1 - trainable_layers_ratio))
+    for layer in xcpetion_model.layers[:trainable_layers_index]:
+        layer.trainable = False
+    for layer in xcpetion_model.layers[trainable_layers_index:]:
+        layer.trainable = True
+
+    for layer in xcpetion_model.layers:
+        layer.trainable = True
+        if isinstance(layer, keras.layers.convolutional.Conv2D):
+            layer.kernel_regularizer = regularizers.l2(0.001)
+            layer.activity_regularizer = regularizers.l1(0.001)
+
+    # add dropout and regularizer to the penultimate Dense layer
+    predictions = xcpetion_model.layers[-1]
+    dropout = Dropout(0.3)
+    fc = xcpetion_model.layers[-2]
+    fc.kernel_regularizer = regularizers.l2(0.001)
+    fc.activity_regularizer = regularizers.l1(0.001)
+
+    x = dropout(fc.output)
+    predictors = predictions(x)
+    new_xcpetion_model = Model(inputs=xcpetion_model.input, outputs=predictors)
+
+    optimizer = Adam(lr=0.1234)
+    start_lr = 0.001
+    end_lr = 0.00001
+    step_lr = (end_lr - start_lr) / (third_phase_train_reps - 1)
+    new_xcpetion_model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['acc'])
+
+    for i in range(third_phase_train_reps):
+        lr = start_lr + step_lr * i
+        K.set_value(new_xcpetion_model.optimizer.lr, lr)
+        print(i, 'out of ', third_phase_train_reps, '\nlearning rate ', K.eval(new_xcpetion_model.optimizer.lr))
+        history = new_xcpetion_model.fit_generator(train_img_class_gen,
+                                               steps_per_epoch=steps_per_small_epoch,
+                                               epochs=small_epochs, verbose=2,
+                                               validation_data=val_img_class_gen, validation_steps=val_steps_per_small_epoch,
+                                               workers=4, callbacks=[tensorboard])
+#         history = new_xcpetion_model.fit_generator(train_img_class_gen,
+#                                                    steps_per_epoch=steps_per_small_epoch,
+#                                                    epochs=small_epochs, verbose=2,
+#                                                    validation_data=val_img_class_gen, validation_steps=val_steps_per_small_epoch,
+#                                                    workers=4, callbacks=[LosswiseKerasCallback(tag='keras xcpetion model')])
+        print(i)
+        if i % saves_per_epoch == 0:
+            print('{} epoch completed'.format(int(i / saves_per_epoch)))
+
+        ts = calendar.timegm(time.gmtime())
+        new_xcpetion_model.save(third_phase_folder + str(ts) + '_xcpetion_model.h5')
+        save_obj(history.history, str(ts) + '_xcpetion_history.h5', folder=third_phase_folder)
+
+    new_xcpetion_model.save(data_folder + '3rd_phase_xcpetion_model.h5')
+
+def second_second_phase(trained=True):
+    global xcpetion_model, new_xcpetion_model
+    #dropout_Callback = Dropout_Callback()
+    tensorboard = TensorBoard(log_dir=second_second_phase_folder + 'tb_logs', batch_size=batch_size)
+
+    if not trained:
+        xcpetion_model = load_model(data_folder + '2nd_phase_xcpetion_model.h5')
+
+        # add dropout and regularizer to the penultimate Dense layer
+        start_drop_num = 0.00
+        end_drop_num = 0.5
+        drop_nums = list(np.linspace(start_drop_num, end_drop_num, second_phase_train_reps))
+
+        predictions = xcpetion_model.layers[-1]
+        dropout = Dropout(0.2)
+        fc = xcpetion_model.layers[-2]
+        x = dropout(fc.output)
+        predictors = predictions(x)
+        new_xcpetion_model = Model(inputs=xcpetion_model.input, outputs=predictors)
+    else:
+        xcpetion_model = load_model(data_folder + '2nd_2nd_phase_xcpetion_model.h5')
+        new_xcpetion_model = xcpetion_model
+
+    new_xcpetion_model.compile(optimizer=Adam(lr=0.0001), loss='categorical_crossentropy', metrics=['acc'])
+
+    # train the model on the new data for a few epochs
+    for i in range(second_phase_train_reps):
+#         history = new_xcpetion_model.fit_generator(train_img_class_gen,
+#                                                steps_per_epoch= steps_per_small_epoch,
+#                                                epochs=small_epochs, verbose=2,
+#                                                validation_data=val_img_class_gen, validation_steps=val_steps_per_small_epoch,
+#                                                workers=4, callbacks=[tensorboard, dropout_Callback])
+        history = new_xcpetion_model.fit_generator(train_img_class_gen,
+                                               steps_per_epoch= steps_per_small_epoch,
+                                               epochs=small_epochs, verbose=2,
+                                               validation_data=val_img_class_gen, validation_steps=val_steps_per_small_epoch,
+                                               workers=4, callbacks=[tensorboard])
+        print(i)
+        if i % saves_per_epoch == 0:
+            print('{} epoch completed'.format(int(i / saves_per_epoch)))
+
+        ts = calendar.timegm(time.gmtime())
+        new_xcpetion_model.save(second_second_phase_folder + str(ts) + '_xcpetion_model.h5')
+        save_obj(history.history, str(ts) + '_xcpetion_history.h5', folder=second_second_phase_folder)
+
+        new_xcpetion_model.save(data_folder + '2nd_2nd_phase_xcpetion_model.h5')
+        
 if __name__ == '__main__':
     
     train_img_class_gen, val_img_class_gen=make_generators(isSimple=False)
-    first_phase()
+#     first_phase()
+#     second_phase()
+#     third_phase()
+    second_second_phase(trained=True)
