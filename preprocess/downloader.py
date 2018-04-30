@@ -85,7 +85,7 @@ def loader():
         os.mkdir(out_dir)
 
     key_url_list = parse_data(data_file)
-    pool = multiprocessing.Pool(processes=20)  # Num of CPUs
+    pool = multiprocessing.Pool(processes=4)  # Num of CPUs
     failures = sum(tqdm.tqdm(pool.imap_unordered(download_image, key_url_list), total=len(key_url_list)))
     print('Total number of download failures:', failures)
     pool.close()

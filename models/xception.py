@@ -162,7 +162,7 @@ def third_phase():
 #                                                    epochs=small_epochs, verbose=2,
 #                                                    validation_data=val_img_class_gen, validation_steps=val_steps_per_small_epoch,
 #                                                    workers=4, callbacks=[LosswiseKerasCallback(tag='keras xcpetion model')])
-        print(i)
+        print("iteration",i)
         if i % saves_per_epoch == 0:
             print('{} epoch completed'.format(int(i / saves_per_epoch)))
 
@@ -181,9 +181,6 @@ def second_second_phase(trained=True):
         xcpetion_model = load_model(data_folder + '2nd_phase_xcpetion_model.h5')
 
         # add dropout and regularizer to the penultimate Dense layer
-        start_drop_num = 0.00
-        end_drop_num = 0.5
-        drop_nums = list(np.linspace(start_drop_num, end_drop_num, second_phase_train_reps))
 
         predictions = xcpetion_model.layers[-1]
         dropout = Dropout(0.2)
@@ -194,8 +191,9 @@ def second_second_phase(trained=True):
     else:
         xcpetion_model = load_model(data_folder + '2nd_2nd_phase_xcpetion_model.h5')
         new_xcpetion_model = xcpetion_model
-
-    new_xcpetion_model.compile(optimizer=Adam(lr=0.0001), loss='categorical_crossentropy', metrics=['acc'])
+    
+    lr = 0.00005#0.0001
+    new_xcpetion_model.compile(optimizer=Adam(lr=lr), loss='categorical_crossentropy', metrics=['acc'])
 
     # train the model on the new data for a few epochs
     for i in range(second_phase_train_reps):
@@ -209,7 +207,7 @@ def second_second_phase(trained=True):
                                                epochs=small_epochs, verbose=2,
                                                validation_data=val_img_class_gen, validation_steps=val_steps_per_small_epoch,
                                                workers=4, callbacks=[tensorboard])
-        print(i)
+        print("iteration", i)
         if i % saves_per_epoch == 0:
             print('{} epoch completed'.format(int(i / saves_per_epoch)))
 
@@ -217,7 +215,7 @@ def second_second_phase(trained=True):
         new_xcpetion_model.save(second_second_phase_folder + str(ts) + '_xcpetion_model.h5')
         save_obj(history.history, str(ts) + '_xcpetion_history.h5', folder=second_second_phase_folder)
 
-        new_xcpetion_model.save(data_folder + '2nd_2nd_phase_xcpetion_model.h5')
+    new_xcpetion_model.save(data_folder + '2nd_2nd_phase_xcpetion_model.h5')
         
 if __name__ == '__main__':
     
