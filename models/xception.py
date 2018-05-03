@@ -38,6 +38,7 @@ losswise.set_api_key('JWN8A6X96')
 module_path = os.path.abspath(os.path.join('..'))
 sys.path.append(module_path)
 from utils.data_util import save_obj, load_obj
+from utils.pred_util import square_error, gap, GapCallback, set_reg_drop
 from conf.configure import *
 from conf.generatorConf import *
 from preprocess.generator import make_generators
@@ -216,11 +217,59 @@ def second_second_phase(trained=True):
         save_obj(history.history, str(ts) + '_xcpetion_history.h5', folder=second_second_phase_folder)
 
     new_xcpetion_model.save(data_folder + '2nd_2nd_phase_xcpetion_model.h5')
+
+def continue_second(trained=True):
+    reg_num = 0.00
+    drop_rate = 0.0
+    gap_callback = GapCallback(val_img_class_gen, val_steps_per_small_epoch)
+    
+#     new_xcpetion_model = load_model_from_file(data_folder + 'xcpetion_model_dropout_1024.json')
+#     new_xcpetion_model = load_weights_from_file(new_xcpetion_model,
+#                                             data_folder + 'xcpetion_model_.json',
+#                                             data_folder + '2nd_phase_xcpetion_weights.h5')
+#     print(new_xcpetion_model.summary())
+    # new_xcpetion_model.load_weights(data_folder + '2nd_phase_xcpetion_weights.h5', by_name=False)
+    
+    if not trained:
+        new_xcpetion_model = load_model(data_folder + '2nd_2nd_phase_xcpetion_model.h5')
+    else:
+        new_xcpetion_model = load_model(data_folder + 'continue_second_phase_xcpetion_model.h5')
+    print("reg_num: ", reg_num, " drop_rate:", drop_rate)
+    new_xcpetion_model = set_reg_drop(new_xcpetion_model, reg_num, drop_rate)
+
+    new_xcpetion_model.compile(optimizer=Adam(lr=0.0002), loss=square_error, metrics=['acc', gap])  # categorical_crossentropy
+#     print('dropout rate: ', new_xcpetion_model.get_layer('fc_1024_dropout').rate)
+
+    if not os.path.exists(continue_second_phase_folder):
+        os.makedirs(continue_second_phase_folder)
         
+    for i in range(second_phase_train_reps):
+        print(i + 1, 'out of ', second_phase_train_reps)
+
+        history = new_xcpetion_model.fit_generator(train_img_class_gen,
+                                                   steps_per_epoch=steps_per_small_epoch,
+                                                   epochs=small_epochs, verbose=2,
+                                                   validation_data=val_img_class_gen,
+                                                   validation_steps=val_steps_per_small_epoch,
+                                                   workers=4,
+                                                   callbacks=[LosswiseKerasCallback(tag='keras xcpetion model'),
+                                                              gap_callback])
+#         print(i)
+        if i % saves_per_epoch == 0:
+            print('{} epoch completed'.format(int(i / saves_per_epoch)))
+
+        ts = calendar.timegm(time.gmtime())
+        new_xcpetion_model.save(continue_second_phase_folder + str(ts) + '_mse_xcpetion_model.h5')
+        # new_xcpetion_model.save(continue_second_phase_folder + str(ts) + '_xcpetion_model.h5')
+        save_obj(history.history, str(ts) + '_xcpetion_mse_history.h5', folder=continue_second_phase_folder)
+
+    new_xcpetion_model.save(data_folder + 'continue_second_phase_xcpetion_model.h5')
+    
 if __name__ == '__main__':
     
     train_img_class_gen, val_img_class_gen=make_generators(isSimple=False)
 #     first_phase()
 #     second_phase()
 #     third_phase()
-    second_second_phase(trained=True)
+#     second_second_phase(trained=True)
+    continue_second(trained=True)
