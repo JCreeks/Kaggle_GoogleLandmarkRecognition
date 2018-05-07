@@ -52,36 +52,31 @@ if __name__ == "__main__":
         whole_ids_list = whole_ids_list[:train_lim]
     total_ids = len(whole_ids_list)
         
-#     xcpetion_model = load_model(pred_model_path)
-    xcpetion1 = load_model('../xception/second_second_phase_logs/1525023121_xcpetion_model.h5')
-#     xcpetion1.compile(optimizer=Adam(lr=0.0001), loss='categorical_crossentropy')
-    xcpetion2 = load_model('../xception/second_second_phase_logs/1525082681_xcpetion_model.h5')
-#     xcpetion2.compile(optimizer=Adam(lr=0.0001), loss='categorical_crossentropy')
-    modelList = [xcpetion1, xcpetion2]
-
-#     xcpPath1 = '../xception/second_second_phase_logs/1525023121_xcpetion_model.h5'
-#     xcpPath2 = '../xception/second_second_phase_logs/1525082681_xcpetion_model.h5'
-#     modelPathList = [xcpPath2, xcpPath1]
+#     xcpetion1 = load_model('../xception/1st_phase_xcpetion_model.h5')
+#     xcpetion2 = load_model('../xception/second_second_phase_logs/1525082681_xcpetion_model.h5')
+    xcpetion1 = '../xception/1st_phase_xcpetion_model.h5'
+    pathList = [xcpetion1]#, xcpetion2]
+    modelList = []
+    for path in pathList:
+        modelList.append(load_model(path))
 
     total = len(split_seq(whole_ids_list, int(total_ids / pieces)))
     with open(results_file, 'w') as f:
         f.write('id,landmarks')
-
+    
+    predProbList = []
     for counter, ids_list in enumerate(split_seq(whole_ids_list, int(total_ids / pieces))):
         steps = int(len(ids_list) / pred_batch_size)
         steps += 0 if len(ids_list) % pred_batch_size == 0 else 1
-
-        pred_list = ids_list[:]
-        pred_gen = pred_generator(pred_list, test_images_folder, pred_batch_size, input_shape)
         
         predList=[]
-        i=0
-        for modelPath in modelList:
-            print("runing itr: ", i)
-            i+=1
-            model = load_model(modelPath)
+        for model in modelList:            
+#             model = load_model(model)
+            pred_list = ids_list[:]
+            pred_gen = pred_generator(pred_list, test_images_folder, pred_batch_size, input_shape, normalize=True)
             pred = model.predict_generator(pred_gen, steps=steps, verbose=2)
             predList.append(pred)
+            del pred_gen
         
         predicts = np.ones(predList[0].shape)
         for pred in predList:
@@ -96,8 +91,20 @@ if __name__ == "__main__":
                 text += "\n" + str(ids_list[i]) + "," + inverted_class_indices_dict[labels_inds[i]] + " " +\
                         str(certainties[i])
             f.write(text)
+            
+        for i, pred in enumerate(predList):
+            if len(predProbList)<len(modelList):
+                predProbList.append(pred)
+            else:  
+                np.append(predProbList[i], pred, axis=0)
 
         print('done {} out of {}'.format(counter + 1, total))
 
     if test:
         add_unknown_imgs(results_file)
+        
+    ensResultPath = '../ensemble/result'
+    if not os.path.exists(ensResultPath):
+        os.makedirs(ensResultPath)
+    for i, path in enumerate(pathList):
+        np.save(os.path.join(ensResultPath, path+'.npy'), predProbList[i])

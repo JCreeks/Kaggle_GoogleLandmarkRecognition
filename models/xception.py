@@ -38,46 +38,59 @@ losswise.set_api_key('JWN8A6X96')
 module_path = os.path.abspath(os.path.join('..'))
 sys.path.append(module_path)
 from utils.data_util import save_obj, load_obj
-from utils.pred_util import square_error, gap, GapCallback, set_reg_drop
+from utils.pred_util import square_error, gap, GapCallback, set_reg_drop, GAP_vector
 from conf.configure import *
 from conf.generatorConf import *
 from preprocess.generator import make_generators
 
-def first_phase():
+def first_phase(trained=True, printGap=True):
     global xcpetion_model
     tensorboard = TensorBoard(log_dir=first_phase_folder + 'tb_logs', batch_size=batch_size)
-    # create the base pre-trained model
-    input_tensor = Input(shape=input_shape)
-    base_model = Xception(input_tensor=input_tensor, weights='imagenet', include_top=False)
 
-    # add a global spatial average pooling layer
-    x = base_model.output
-    x = GlobalAveragePooling2D()(x)
-    # add a fully-connected layer
-    x = Dense(1024, activation='relu')(x)
-    # add a logistic layer
-    predictions = Dense(classes_num, activation='softmax')(x)
-    #predictions = Dense(train_classes_num, activation='softmax')(x)
-    
-    # this is the model we will train
-    xcpetion_model = Model(inputs=base_model.input, outputs=predictions)
-    xcpetion_model.compile(optimizer=Adam(lr=0.0001), loss='categorical_crossentropy', metrics=['acc'])
+    if not trained:
+        # create the base pre-trained model
+        input_tensor = Input(shape=input_shape)
+        base_model = Xception(input_tensor=input_tensor, weights='imagenet', include_top=False)
 
-    for i in range(first_phase_train_reps):
+        # add a global spatial average pooling layer
+        x = base_model.output
+        x = GlobalAveragePooling2D()(x)
+        # add a fully-connected layer
+        x = Dense(1024, activation='relu')(x)
+        # add a logistic layer
+        predictions = Dense(classes_num, activation='softmax')(x)
+
+        # this is the model we will train
+        xcpetion_model = Model(inputs=base_model.input, outputs=predictions)
+        xcpetion_model.compile(optimizer=Adam(lr=0.0001), loss='categorical_crossentropy', metrics=['acc'])
+    else:
+        xcpetion_model = load_model(data_folder + '1st_phase_xcpetion_model.h5')
+
+    for i in range(5):#first_phase_train_reps):
         history = xcpetion_model.fit_generator(train_img_class_gen,
                                      steps_per_epoch=steps_per_small_epoch,
-                                     epochs=small_epochs, verbose=2,
+                                     epochs=small_epochs, 
+                                     verbose=2,
                                      validation_data=val_img_class_gen, validation_steps=val_steps_per_small_epoch,
                                      workers=4, callbacks=[tensorboard])
-        print(i)
+        print('itr', i)
         if i % saves_per_epoch == 0:
             print('{} epoch completed'.format(int(i / saves_per_epoch)))
 
         ts = calendar.timegm(time.gmtime())
         xcpetion_model.save(first_phase_folder + str(ts) + '_xcpetion_model.h5')
         save_obj(history.history, str(ts) + '_xcpetion_history', folder=first_phase_folder)
+        
+        if printGap:
+            steps = len(val_names_list)/batch_size
+            predicts = xcpetion_model.predict_generator(val_img_class_gen, steps=steps/10, verbose=2)##########
+            predProb = np.max(predicts, axis=-1)
+            predId = np.argmax(predicts, axis=-1)
+            trueId = list(map(lambda x: val_name_id_dict[str(x).split('.')[0].split('/')[1]], [name for name in val_img_class_gen.filenames]))
+            gap = GAP_vector(predId, predProb, trueId)
+            print('gap: ', gap)
 
-    xcpetion_model.save(data_folder + '1st_phase_xcpetion_model.h5')
+        xcpetion_model.save(data_folder + '1st_phase_xcpetion_model.h5')
     
 def second_phase():
     global xcpetion_model
@@ -97,13 +110,13 @@ def second_phase():
     xcpetion_model.compile(optimizer=Adam(lr=0.0001), loss='categorical_crossentropy', metrics=['acc'])
 
     # train the model on the new data for a few epochs
-    for i in range(second_phase_train_reps):
+    for i in range(5):#second_phase_train_reps):
         history = xcpetion_model.fit_generator(train_img_class_gen,
                                                steps_per_epoch=steps_per_small_epoch,
                                                epochs=small_epochs, verbose=2,
                                                validation_data=val_img_class_gen, validation_steps=val_steps_per_small_epoch,
                                                workers=4, callbacks=[tensorboard])
-        print(i)
+        print('itr', i)
         if i % saves_per_epoch == 0:
             print('{} epoch completed'.format(int(i / saves_per_epoch)))
 
@@ -116,7 +129,7 @@ def second_phase():
 def third_phase():
     global xcpetion_model, new_xcpetion_model, optimizer
     tensorboard = TensorBoard(log_dir=third_phase_folder + 'tb_logs', batch_size=batch_size)
-    xcpetion_model = load_model(data_folder + '2nd_phase_xcpetion_model.h5')
+    xcpetion_model = load_model(data_folder + '1st_phase_xcpetion_model.h5')
 
     # add regularizers to the convolutional layers
     trainable_layers_ratio = 1 / 2.0
@@ -149,6 +162,9 @@ def third_phase():
     step_lr = (end_lr - start_lr) / (third_phase_train_reps - 1)
     new_xcpetion_model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['acc'])
 
+    if not os.path.exists(third_phase_folder):
+        os.makedirs(third_phase_folder)
+        
     for i in range(third_phase_train_reps):
         lr = start_lr + step_lr * i
         K.set_value(new_xcpetion_model.optimizer.lr, lr)
@@ -205,7 +221,8 @@ def second_second_phase(trained=True):
 #                                                workers=4, callbacks=[tensorboard, dropout_Callback])
         history = new_xcpetion_model.fit_generator(train_img_class_gen,
                                                steps_per_epoch= steps_per_small_epoch,
-                                               epochs=small_epochs, verbose=2,
+                                               epochs=small_epochs, 
+                                               verbose=2,
                                                validation_data=val_img_class_gen, validation_steps=val_steps_per_small_epoch,
                                                workers=4, callbacks=[tensorboard])
         print("iteration", i)
@@ -267,9 +284,9 @@ def continue_second(trained=True):
     
 if __name__ == '__main__':
     
-    train_img_class_gen, val_img_class_gen=make_generators(isSimple=False)
-#     first_phase()
+    train_img_class_gen, val_img_class_gen=make_generators(isSimple=True)
+#     first_phase(trained=True, printGap=False)
 #     second_phase()
-#     third_phase()
+    third_phase()
 #     second_second_phase(trained=True)
-    continue_second(trained=True)
+#     continue_second(trained=True)
