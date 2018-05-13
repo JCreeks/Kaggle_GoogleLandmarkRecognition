@@ -54,8 +54,14 @@ if __name__ == "__main__":
         
 #     xcpetion1 = load_model('../xception/1st_phase_xcpetion_model.h5')
 #     xcpetion2 = load_model('../xception/second_second_phase_logs/1525082681_xcpetion_model.h5')
-    xcpetion1 = '../xception/1st_phase_xcpetion_model.h5'
-    pathList = [xcpetion1]#, xcpetion2]
+    xcpetion1_0 = '../xception/first_phase_logs/1525550924_xcpetion_model.h5'
+    xcpetion1_1 = '../xception/first_phase_logs/1525597648_xcpetion_model.h5'
+    xcpetion1_2 = '../xception/first_phase_logs/1525640444_xcpetion_model.h5'
+    xcpetion2 = '../xception/2nd_phase_xcpetion_model.h5'
+    xcpetion3 = '../xception/3rd_phase_xcpetion_model.h5'
+    inceptRes3 = '../inceptionResnet/3rd_phase_inceptionResnet_model.h5'
+        
+    pathList = [inceptRes3]
     modelList = []
     for path in pathList:
         modelList.append(load_model(path))
@@ -96,7 +102,7 @@ if __name__ == "__main__":
             if len(predProbList)<len(modelList):
                 predProbList.append(pred)
             else:  
-                np.append(predProbList[i], pred, axis=0)
+                predProbList[i]=np.append(predProbList[i], pred, axis=0)
 
         print('done {} out of {}'.format(counter + 1, total))
 
@@ -107,4 +113,4 @@ if __name__ == "__main__":
     if not os.path.exists(ensResultPath):
         os.makedirs(ensResultPath)
     for i, path in enumerate(pathList):
-        np.save(os.path.join(ensResultPath, path+'.npy'), predProbList[i])
+        np.save(os.path.join(ensResultPath, path.split('/')[-1]+'.npy'), predProbList[i])

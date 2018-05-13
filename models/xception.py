@@ -147,7 +147,7 @@ def third_phase():
 
     # add dropout and regularizer to the penultimate Dense layer
     predictions = xcpetion_model.layers[-1]
-    dropout = Dropout(0.3)
+    dropout = Dropout(0.2)
     fc = xcpetion_model.layers[-2]
     fc.kernel_regularizer = regularizers.l2(0.001)
     fc.activity_regularizer = regularizers.l1(0.001)
@@ -157,7 +157,7 @@ def third_phase():
     new_xcpetion_model = Model(inputs=xcpetion_model.input, outputs=predictors)
 
     optimizer = Adam(lr=0.1234)
-    start_lr = 0.001
+    start_lr = 0.0002
     end_lr = 0.00001
     step_lr = (end_lr - start_lr) / (third_phase_train_reps - 1)
     new_xcpetion_model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['acc'])
