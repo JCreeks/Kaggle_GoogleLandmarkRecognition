@@ -6,6 +6,7 @@ import random
 import calendar
 import time
 import os, sys
+from  os import listdir
 
 import warnings
 warnings.filterwarnings('ignore')
@@ -44,14 +45,25 @@ module_path = os.path.abspath(os.path.join('..'))
 sys.path.append(module_path)
 from utils.data_util import save_obj, load_obj
 from utils.pred_util import square_error, gap, GapCallback, set_reg_drop, GAP_vector
-from utils.siamese_util import set_trainables, get_codes_from_files, code_generator, get_results
+from utils.siamese_util import set_trainables, code_generator, get_code_net, calc_new_prob
 from conf.configure import *
 from conf.generatorConf import *
 from preprocess.generator import make_siamese_generators
 
+def get_codes_from_files(codes_folder):
+    """ yields the codes (dict) from each file in the codes folder"""
+    for filename in listdir(codes_folder):
+        filename = filename.replace('.pkl', '')
+        codes = load_obj(filename, folder=codes_folder)
+        yield codes
+
 def make_codes_by_category(train_codes_folder, codes_by_category_folder, train_name_id_dict):
+    if not os.path.exists(codes_by_category_folder):
+        os.makedirs(codes_by_category_folder)
+        
     counter = 1
     for train_codes in listdir(train_codes_folder):
+        train_codes = train_codes.replace('.pkl', '')
         print(train_codes)
         counter += 1
         temp_cats_dict = dict()
@@ -101,7 +113,7 @@ def compute_codes(imgs_path, codes_folder, siamese_model_path):
             names = this_names[:]
             steps = len(this_names) // batch_size + (1 if len(names) % batch_size else 0)
             codes = code_net.predict_generator(code_generator(names, imgs_path, batch_size=batch_size),
-                                               steps=steps, verbose=1, workers=4)
+                                               steps=steps, verbose=2, workers=4)
             code_dict['codes'] = codes
             # codes = batch_compute_codes(code_net, imgs)
             save_obj(code_dict, 'batch_{}'.format(counter), folder=codes_folder)
@@ -135,7 +147,30 @@ def make_categories_vectors_2(codes_folder, name_id_dict, imgs_per_cat_limit=Non
         cat_codes_dict[key] = val
     return cat_codes_dict
 
-def compute_similarities_for_each(test_codes_folder, cat_codes_dict, old_results_file):
+def get_results(results_file):
+    """returns a dict with images names (without suffix) as keys and the result's idd/class as value"""
+    names_results_ids_dict = dict()
+    with open(results_file) as f:
+        f.readline()
+        for line in f:
+            name, idd = line.strip().split(',')
+            if len(idd) < 3:
+                save_obj(names_results_ids_dict, 'names_results_ids_dict')
+                return names_results_ids_dict
+            idd = idd.split(' ')[0]
+            names_results_ids_dict[name] = idd
+    return names_results_ids_dict
+
+def calc_for_each_sim(code, cat):
+    cat_codes = load_obj(cat, folder=codes_by_category_folder)
+    total = len(cat_codes['codes'])
+    similarity = 0
+    for cat_code in cat_codes['codes']:
+        similarity += 1 - cosine(code, cat_code)
+    return similarity / total
+
+def compute_similarities_for_each(test_codes_folder, old_results_file):
+    suf = '.jpg'
     test_img_similarity_dict = dict()
     names_results_ids_dict = get_results(old_results_file)
     counter = 1
@@ -149,7 +184,7 @@ def compute_similarities_for_each(test_codes_folder, cat_codes_dict, old_results
         print(counter)
         counter += 1
     # test_img_similarity_dict = distance_to_similarity(test_img_similarity_dict, min_distance)
-    save_obj(test_img_similarity_dict, wording_folder+'test_img_similarity_dict')
+    save_obj(test_img_similarity_dict, 'test_img_similarity_dict'+old_results_file.split('/')[-1])
     return test_img_similarity_dict
 
 def change_results_from_code_files(test_img_similarity_dict, old_results_file, new_results_file, old_prop_rate=0.5):
@@ -165,28 +200,30 @@ def change_results_from_code_files(test_img_similarity_dict, old_results_file, n
                     line = line.replace(old_prob, str(new_prob))
                 fout.write(line)
 
-def run_tests(cat_codes_dict):
+def run_tests(old_prop_rate = 0):
 #     cat_codes_dict = load_obj('cat_codes_dict', folder=working_folder)
     try:
-        img_similarity_dict = load_obj('test_img_similarity_dict', folder=working_folder)
+        img_similarity_dict = load_obj('test_img_similarity_dict'+old_results_file.split('/')[-1], folder=working_folder)
     except:
-        img_similarity_dict = compute_similarities_for_each(test_codes_folder, cat_codes_dict, old_results_file)
-    old_prop_rate = 0
+        img_similarity_dict = compute_similarities_for_each(test_codes_folder, old_results_file)
+    
     change_results_from_code_files(img_similarity_dict, old_results_file, results_file, old_prop_rate)
     
 if __name__ == '__main__':
     print('start excecution')
-    
-    compute_codes(train_images_folder, train_codes_folder, '../siamese/'+'1st_phase_siamese_model.h5')
-    make_codes_by_category(train_codes_folder, codes_by_category_folder, train_name_id_dict)
-    
-#     compute_codes(val_images_folder, val_codes_folder, '../siamese/'+'1st_phase_siamese_model.h5')
-    compute_codes(test_images_folder, test_codes_folder, '../siamese/'+'1st_phase_siamese_model.h5')
-    
-    try:
-        cat_codes_dict = load_obj('cat_codes_dict', folder=working_folder)
-    except:
-        cat_codes_dict = make_categories_vectors_2(test_codes_folder, val_name_id_dict)
-        save_obj(cat_codes_dict, name='cat_codes_dict', folder=working_folder)
-        
-    run_tests(cat_codes_dict)
+
+    # compute_codes(train_images_folder, train_codes_folder, '../siamese/'+'1st_phase_siamese_model.h5')
+    # make_codes_by_category(train_codes_folder, codes_by_category_folder, train_name_id_dict)
+
+    # compute_codes(val_images_folder, val_codes_folder, '../siamese/'+'1st_phase_siamese_model.h5')
+    # make_codes_by_category(val_images_folder, codes_by_category_folder, val_name_id_dict)
+
+    # compute_codes(test_images_folder, test_codes_folder, '../siamese/'+'1st_phase_siamese_model.h5')
+
+    # try:
+    #     cat_codes_dict = load_obj('cat_codes_dict', folder=working_folder)
+    # except:
+    #     cat_codes_dict = make_categories_vectors_2(test_codes_folder, val_name_id_dict)
+    #     save_obj(cat_codes_dict, name='cat_codes_dict', folder=working_folder)
+
+    run_tests(old_prop_rate = 0)

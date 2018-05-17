@@ -126,18 +126,22 @@ def second_phase():
 
     xcpetion_model.save(data_folder + '2nd_phase_xcpetion_model.h5')
     
-def third_phase():
+def third_phase(trained=False, third_phase_train_reps=third_phase_train_reps):
     global xcpetion_model, new_xcpetion_model, optimizer
     tensorboard = TensorBoard(log_dir=third_phase_folder + 'tb_logs', batch_size=batch_size)
-    xcpetion_model = load_model(data_folder + '1st_phase_xcpetion_model.h5')
+    
+    if trained:
+        xcpetion_model = load_model(data_folder + '1st_phase_xcpetion_model.h5')
+    else:
+        xcpetion_model = load_model(data_folder + '3rd_phase_xcpetion_model.h5')
 
     # add regularizers to the convolutional layers
-    trainable_layers_ratio = 1 / 2.0
-    trainable_layers_index = int(len(xcpetion_model.layers) * (1 - trainable_layers_ratio))
-    for layer in xcpetion_model.layers[:trainable_layers_index]:
-        layer.trainable = False
-    for layer in xcpetion_model.layers[trainable_layers_index:]:
-        layer.trainable = True
+#     trainable_layers_ratio = 1 / 2.0
+#     trainable_layers_index = int(len(xcpetion_model.layers) * (1 - trainable_layers_ratio))
+#     for layer in xcpetion_model.layers[:trainable_layers_index]:
+#         layer.trainable = False
+#     for layer in xcpetion_model.layers[trainable_layers_index:]:
+#         layer.trainable = True
 
     for layer in xcpetion_model.layers:
         layer.trainable = True
@@ -157,7 +161,7 @@ def third_phase():
     new_xcpetion_model = Model(inputs=xcpetion_model.input, outputs=predictors)
 
     optimizer = Adam(lr=0.1234)
-    start_lr = 0.0002
+    start_lr = 0.0001
     end_lr = 0.00001
     step_lr = (end_lr - start_lr) / (third_phase_train_reps - 1)
     new_xcpetion_model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['acc'])
@@ -182,10 +186,11 @@ def third_phase():
         print("iteration",i)
         if i % saves_per_epoch == 0:
             print('{} epoch completed'.format(int(i / saves_per_epoch)))
-
-        ts = calendar.timegm(time.gmtime())
-        new_xcpetion_model.save(third_phase_folder + str(ts) + '_xcpetion_model.h5')
-        save_obj(history.history, str(ts) + '_xcpetion_history.h5', folder=third_phase_folder)
+        
+        if i>=5:
+            ts = calendar.timegm(time.gmtime())
+            new_xcpetion_model.save(third_phase_folder + str(ts) + '_xcpetion_model.h5')
+            save_obj(history.history, str(ts) + '_xcpetion_history.h5', folder=third_phase_folder)
 
     new_xcpetion_model.save(data_folder + '3rd_phase_xcpetion_model.h5')
 
@@ -228,10 +233,11 @@ def second_second_phase(trained=True):
         print("iteration", i)
         if i % saves_per_epoch == 0:
             print('{} epoch completed'.format(int(i / saves_per_epoch)))
-
-        ts = calendar.timegm(time.gmtime())
-        new_xcpetion_model.save(second_second_phase_folder + str(ts) + '_xcpetion_model.h5')
-        save_obj(history.history, str(ts) + '_xcpetion_history.h5', folder=second_second_phase_folder)
+        
+        if i>=5:
+            ts = calendar.timegm(time.gmtime())
+            new_xcpetion_model.save(second_second_phase_folder + str(ts) + '_xcpetion_model.h5')
+            save_obj(history.history, str(ts) + '_xcpetion_history.h5', folder=second_second_phase_folder)
 
     new_xcpetion_model.save(data_folder + '2nd_2nd_phase_xcpetion_model.h5')
 
@@ -287,6 +293,6 @@ if __name__ == '__main__':
     train_img_class_gen, val_img_class_gen=make_generators(isSimple=True)
 #     first_phase(trained=True, printGap=False)
 #     second_phase()
-    third_phase()
+    third_phase(trained=True, third_phase_train_reps=5)
 #     second_second_phase(trained=True)
 #     continue_second(trained=True)
