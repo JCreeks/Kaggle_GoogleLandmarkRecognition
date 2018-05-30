@@ -59,26 +59,16 @@ if __name__ == "__main__":
     xcpetion1_2 = '../xception/first_phase_logs/1525640444_xcpetion_model.h5'
     xcpetion2 = '../xception/2nd_phase_xcpetion_model.h5'
     xcpetion3 = '../xception/3rd_phase_xcpetion_model.h5'
-    inceptRes3 = '../inceptionResnet/3rd_phase_inceptionResnet_model.h5'
-    vgg1 = '../vGG/1st_phase_VGG_model.h5'    
-    vgg3 = '../vGG/3rd_phase_VGG_model.h5'     
-    dense1 = '../denseNet/1st_phase_denseNet_model.h5'
-    dense3 = '../denseNet/3rd_phase_denseNet_model.h5'
-    inception1 = '../inception/1st_phase_inception_model.h5'
-    inception3 = '../inception/3rd_phase_inception_model.h5'
-    dense169_1 = '../denseNet169/1st_phase_denseNet169_model.h5'
-    dense169_3 = '../denseNet169/3rd_phase_denseNet169_model.h5'
-    dense121_3 = '../denseNet121/3rd_phase_denseNet121_model.h5'
-    nasnet3 = '../nasnet/3rd_phase_nasnet_model.h5'
-    
-    pathList = [nasnet3]
+    resnet1 = '../resnet/1st_phase_resnet_model.h5'
+    resnet3 = '../resnet/3rd_phase_resnet_model.h5'
+    inceptRes1 = '../inceptionResnet/1st_phase_inceptionResnet_model.h5'
+#     pathList = [xcpetion1_0,xcpetion1_1,xcpetion1_2,xcpetion2,xcpetion3]
+    pathList = [inceptRes1]
     modelList = []
     for path in pathList:
         modelList.append(load_model(path))
 
     total = len(split_seq(whole_ids_list, int(total_ids / pieces)))
-    with open(results_file, 'w') as f:
-        f.write('id,landmarks')
     
     predProbList = []
     for counter, ids_list in enumerate(split_seq(whole_ids_list, int(total_ids / pieces))):
@@ -93,20 +83,6 @@ if __name__ == "__main__":
             pred = model.predict_generator(pred_gen, steps=steps, verbose=2)
             predList.append(pred)
             del pred_gen
-        
-        predicts = np.ones(predList[0].shape)
-        for pred in predList:
-            predicts*=pred
-        predicts**=(1./len(predList))
-        certainties = np.max(predicts, axis=-1)
-        labels_inds = np.argmax(predicts, axis=-1)
-
-        with open(results_file, 'a') as f:
-            text = ''
-            for i in range(len(ids_list)):
-                text += "\n" + str(ids_list[i]) + "," + inverted_class_indices_dict[labels_inds[i]] + " " +\
-                        str(certainties[i])
-            f.write(text)
             
         for i, pred in enumerate(predList):
             if len(predProbList)<len(modelList):
@@ -115,9 +91,6 @@ if __name__ == "__main__":
                 predProbList[i]=np.append(predProbList[i], pred, axis=0)
 
         print('done {} out of {}'.format(counter + 1, total))
-
-    if test:
-        add_unknown_imgs(results_file)
         
     ensResultPath = '../ensemble/result'
     if not os.path.exists(ensResultPath):

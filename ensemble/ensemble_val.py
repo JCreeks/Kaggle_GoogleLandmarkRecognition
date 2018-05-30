@@ -44,10 +44,9 @@ from conf.generatorConf import *
 from conf.predConf import *
 
 if __name__ == "__main__":
-    test = True
     train_lim = 0#2**15
     pieces = 20
-    whole_ids_list = make_ids_list(test_images_folder)
+    whole_ids_list = make_ids_list(val_images_folder)
     if train_lim:
         whole_ids_list = whole_ids_list[:train_lim]
     total_ids = len(whole_ids_list)
@@ -70,8 +69,9 @@ if __name__ == "__main__":
     dense169_3 = '../denseNet169/3rd_phase_denseNet169_model.h5'
     dense121_3 = '../denseNet121/3rd_phase_denseNet121_model.h5'
     nasnet3 = '../nasnet/3rd_phase_nasnet_model.h5'
+    resnet3 = '../resnet/3rd_phase_resnet_model.h5'#.081 #0.082
     
-    pathList = [nasnet3]
+    pathList = [dense1,]#resnet3, dense3, dense169_3, dense121_3]# 
     modelList = []
     for path in pathList:
         modelList.append(load_model(path))
@@ -89,24 +89,10 @@ if __name__ == "__main__":
         for model in modelList:            
 #             model = load_model(model)
             pred_list = ids_list[:]
-            pred_gen = pred_generator(pred_list, test_images_folder, pred_batch_size, input_shape, normalize=True)
+            pred_gen = pred_generator(pred_list, val_images_folder, pred_batch_size, input_shape, normalize=True)
             pred = model.predict_generator(pred_gen, steps=steps, verbose=2)
             predList.append(pred)
             del pred_gen
-        
-        predicts = np.ones(predList[0].shape)
-        for pred in predList:
-            predicts*=pred
-        predicts**=(1./len(predList))
-        certainties = np.max(predicts, axis=-1)
-        labels_inds = np.argmax(predicts, axis=-1)
-
-        with open(results_file, 'a') as f:
-            text = ''
-            for i in range(len(ids_list)):
-                text += "\n" + str(ids_list[i]) + "," + inverted_class_indices_dict[labels_inds[i]] + " " +\
-                        str(certainties[i])
-            f.write(text)
             
         for i, pred in enumerate(predList):
             if len(predProbList)<len(modelList):
@@ -115,11 +101,8 @@ if __name__ == "__main__":
                 predProbList[i]=np.append(predProbList[i], pred, axis=0)
 
         print('done {} out of {}'.format(counter + 1, total))
-
-    if test:
-        add_unknown_imgs(results_file)
         
-    ensResultPath = '../ensemble/result'
+    ensResultPath = '../ensemble/val_result'
     if not os.path.exists(ensResultPath):
         os.makedirs(ensResultPath)
     for i, path in enumerate(pathList):

@@ -200,14 +200,14 @@ def change_results_from_code_files(test_img_similarity_dict, old_results_file, n
                     line = line.replace(old_prob, str(new_prob))
                 fout.write(line)
 
-def run_tests(old_prop_rate = 0):
+def run_tests(old_prop_rate = 0, new_results_file=new_results_file):
 #     cat_codes_dict = load_obj('cat_codes_dict', folder=working_folder)
     try:
         img_similarity_dict = load_obj('test_img_similarity_dict'+old_results_file.split('/')[-1], folder=working_folder)
     except:
         img_similarity_dict = compute_similarities_for_each(test_codes_folder, old_results_file)
     
-    change_results_from_code_files(img_similarity_dict, old_results_file, results_file, old_prop_rate)
+    change_results_from_code_files(img_similarity_dict, old_results_file, new_results_file, old_prop_rate)
     
 if __name__ == '__main__':
     print('start excecution')
@@ -226,4 +226,4 @@ if __name__ == '__main__':
     #     cat_codes_dict = make_categories_vectors_2(test_codes_folder, val_name_id_dict)
     #     save_obj(cat_codes_dict, name='cat_codes_dict', folder=working_folder)
 
-    run_tests(old_prop_rate = 0)
+    run_tests(old_prop_rate = 0, new_results_file=new_results_file)
