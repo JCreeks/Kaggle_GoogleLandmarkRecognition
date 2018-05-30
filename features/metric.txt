@@ -1,5 +1,5 @@
 
-bal AP, the confidence score you give your prediction is very important. Based on this score, a ranking will be made. Then, the precision at every rank will be considered. If the prediction at rank k is correct, the Precision at rank k will count towards the global score, if not, it will be 0.
+Global AP, the confidence score you give your prediction is very important. Based on this score, a ranking will be made. Then, the precision at every rank will be considered. If the prediction at rank k is correct, the Precision at rank k will count towards the global score, if not, it will be 0.
 
 If you give 1 to all predictions, then the ranking will be random, leading to a very low Global AP. It is similar to a random prediction.
 
